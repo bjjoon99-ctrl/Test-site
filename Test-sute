@@ -1,0 +1,60 @@
+// language: Java, file: BypassManager.java, target: Android 14+, SDK 34
+package com.bench.bypass;
+
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.util.Log;
+
+public class BypassManager extends AccessibilityService {
+    private static final String TAG = "BypassManager";
+
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                traverseAndDisableRestrictions(rootNode);
+                rootNode.recycle();
+            }
+        }
+    }
+
+    private void traverseAndDisableRestrictions(AccessibilityNodeInfo node) {
+        if (node == null) return;
+
+        CharSequence text = node.getText();
+        if (text != null) {
+            String content = text.toString();
+            if (content.contains("시간 제한") || content.contains("제한됨") || content.contains("차단")) {
+                if (node.isClickable()) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    Log.log(TAG, "[+] Target restriction element neutralized: " + content);
+                }
+            }
+        }
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                traverseAndDisableRestrictions(child);
+                child.recycle();
+            }
+        }
+    }
+
+    @Override
+    public void onInterrupt() {}
+
+    @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        AccessibilityServiceInfo info = new AccessibilityServiceInfo();
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED | AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+        info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
+        info.flags = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+        info.packageNames = null;
+        setServiceInfo(info);
+    }
+}
